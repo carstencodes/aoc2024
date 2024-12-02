@@ -47,12 +47,6 @@ let changeLineToEvaluationLine (changeLine: ChangeLine)  =
     
     (evaluation, allSame)
 
-let dataLineToEvaluationLine (dataLine: LineData) =
-    let changeLine = dataLineToChangeLine dataLine 
-    let evaluatedLine = changeLineToEvaluationLine changeLine
-
-    (evaluatedLine)
-
 let isEvaluationLineSafe tupleLine = 
     let (evaluationLine, allSame) = tupleLine
     let isSafe e = 
@@ -63,6 +57,35 @@ let isEvaluationLineSafe tupleLine =
     let allSafe = evaluationLine |> List.forall isSafe
     
     (allSafe && allSame)
+
+let dataLineToSafeUnsafeEvaluationLine (dataLine: LineData) =
+    let lineWithoutElementAtIndex i a =
+        let head =
+            if i = 0
+            then []
+            else dataLine |> List.take i
+
+        let tail = 
+            if i = (dataLine |> List.length) - 1
+            then []
+            else dataLine |> List.skip (i + 1)
+
+        (head @ tail)
+
+    let allPossibleLines = dataLine |> List.mapi lineWithoutElementAtIndex
+    
+    let evaluateSingleLine ln =
+        let changeLine = dataLineToChangeLine ln 
+        let evaluatedLine = changeLineToEvaluationLine changeLine
+        let isSafeUnsafe = isEvaluationLineSafe evaluatedLine
+
+        (isSafeUnsafe)
+
+    let allEvaluatedLines = allPossibleLines |> List.map evaluateSingleLine
+
+    let oneLineIsSafe = allEvaluatedLines |> List.exists (fun b -> b)
+
+    (oneLineIsSafe)
 
 let parseLine (l: string) =
     let result = (l.Split [|' '|] |> Array.toList) |> List.map (fun c -> int c)
@@ -1084,8 +1107,8 @@ let input = """87 90 92 95 96 93
 58 56 55 52 49 48 45 43"""
 
 let data = parse input
-let safeUnsafe = data |> List.map dataLineToEvaluationLine
-let isSafe = safeUnsafe |> List.map isEvaluationLineSafe
+let isSafe = data |> List.map dataLineToSafeUnsafeEvaluationLine
+
 let countSafe = isSafe |> List.filter (fun b -> b) |> List.length
 
 printfn "%i" countSafe
