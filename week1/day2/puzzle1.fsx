@@ -31,11 +31,13 @@ let evaluateChange change =
 let changeLineToEvaluationLine (changeLine: ChangeLine)  =
     let evaluation = changeLine |> List.map evaluateChange
     
-    let isIncrease c = match c with
+    let isIncrease c = 
+        match c with
         | Increase (x) -> true
         | _ -> false
         
-    let isDecrease c = match c with
+    let isDecrease c = 
+        match c with
         | Decrease (x) -> true
         | _ -> false
     
@@ -47,7 +49,8 @@ let changeLineToEvaluationLine (changeLine: ChangeLine)  =
 
 let isEvaluationLineSafe tupleLine = 
     let (evaluationLine, allSame) = tupleLine
-    let isSafe e = match e with 
+    let isSafe e = 
+        match e with 
         | Safe f -> true
         | _ -> false
     
