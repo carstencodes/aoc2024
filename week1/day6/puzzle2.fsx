@@ -7,7 +7,7 @@ type Direction =
 type MapContentPart = 
     | Free
     | Visited of Direction
-    | Turn
+    | Turn of Direction
     | Obstacle
     | AssumedObstacle
 
@@ -58,7 +58,7 @@ let printGame (g: Game) =
                           if curPos i j pos
                           then dirToChar dir
                           else visitedToChar d
-                | Turn -> '+'
+                | Turn _ -> '+'
                 | AssumedObstacle -> 'O'
                 | Free -> '.'
             printf "%c" char
@@ -77,6 +77,32 @@ let isObstacle (map: MapLayout) postion =
 
     point = Obstacle
 
+let isFree (map: MapLayout) postion =
+    let point = map[postion]
+
+    point = Free
+
+let isVisited (map: MapLayout) postion direction =
+    let point = map[postion]
+
+    match point with
+    | Visited v -> direction = v
+    | _ -> false
+
+let isTurn (map: MapLayout) postion direction =
+    let point = map[postion]
+
+    match point with
+    | Turn t -> t = direction
+    | _ -> false
+
+let goesIntoDirection (map: MapLayout) postion direction =
+    let point = map[postion]
+
+    match point with
+    | Turn t | Visited t -> t = direction
+    | _ -> false
+
 let leavesMap dimOfMap pos =
     let x, y = pos
     let maxX, maxY = dimOfMap
@@ -93,13 +119,15 @@ let rotate dir =
     | Down -> Left
     | Left -> Up
 
-let rec runAheadRunsIntoLoop dim route pos dir = 
-    let nextPos = getNextPos pos dir
-    route |> List.contains (pos, dir) || 
-        if leavesMap dim nextPos
-        then false
-        else runAheadRunsIntoLoop dim route nextPos dir
-
+let rec willGetSameRoute map dimensions position direction = 
+    let nextPos = getNextPos position direction
+    let leftMap = leavesMap dimensions nextPos
+    let directionIsSame = not (leftMap) && goesIntoDirection map nextPos direction
+    if directionIsSame
+    then true
+    else if leftMap
+          then false
+          else willGetSameRoute map dimensions nextPos direction
 
 let playMove game =
     let mapInstance, pos, dir = game
@@ -112,20 +140,48 @@ let playMove game =
 
     let nextValue = 
         if hitsObstacle
-        then Turn
+        then Turn (rotate dir)
         else Visited dir
 
-    let newMap = map |> Map.change pos (fun v -> 
-            match v with
+    let nextIsFree = not(mapLeft) && isFree map nextPos
+    let curIsTurn = isTurn map pos (rotate dir)
+    let curIsVisitedInTurnedDirection = isVisited map pos (rotate dir)
+
+    let posAhead = getNextPos pos (rotate dir)
+    
+    let rule1Matches = nextIsFree && curIsTurn
+    let rule2Matches = nextIsFree && curIsVisitedInTurnedDirection 
+    let rule4to6Matches = nextIsFree && willGetSameRoute map mapSize posAhead (rotate dir)
+    let rule3Matches = false
+    
+    let couldReplace v =
+        match v with
             | Some s -> 
                 match s with
                 | Free -> Some (nextValue)
-                | Turn -> Some Turn
+                | Turn t -> Some (Turn t)
                 | Obstacle -> Some Obstacle
                 | AssumedObstacle -> Some AssumedObstacle
                 | Visited v -> Some (Visited v)
             | None -> None
-        )
+
+    let couldReplaceByAssumedObstacle v=
+        match v with
+            | Some s -> 
+                match s with
+                | Free -> Some (AssumedObstacle)
+                | Turn t -> Some (Turn t)
+                | Obstacle -> Some Obstacle
+                | AssumedObstacle -> Some AssumedObstacle
+                | Visited v -> Some (Visited v)
+            | None -> None
+
+    let newMap = map |> Map.change pos couldReplace
+
+    let newMap = 
+        if (rule1Matches || rule2Matches || rule3Matches || rule4to6Matches)
+        then newMap |> Map.change nextPos couldReplaceByAssumedObstacle
+        else newMap
 
     let mapInstance = newMap, mapSize
 
@@ -160,7 +216,7 @@ let parse (t: string) =
         let changePositionAndMarkAsNoObstacle i j dir = 
             position <- (i, j)
             currentDirection <- dir
-            Free
+            Turn dir
 
         let parseDirection c =
             match c with
@@ -344,14 +400,18 @@ let mapInstance , _, _ = finished
 
 let map, _ = mapInstance
 
-let isVisited p =
+let isVisitedPoint p =
     match p with
     | Free -> false
     | Obstacle -> false
     | _ -> true
 
-printfn "%A" map
+let isAssumedObstaclePoint p =
+    match p with
+    | AssumedObstacle -> true
+    | _ -> false
 
-let visited = map.Values |> Seq.toList |> List.filter isVisited 
+
+let visited = map.Values |> Seq.toList |> List.filter isAssumedObstaclePoint 
 
 printfn "%i" (visited |> List.length)
