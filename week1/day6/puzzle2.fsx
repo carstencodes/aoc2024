@@ -97,26 +97,27 @@ let singleElement seq =
         failwith "Sequence contains more than one item"
     else seq |> Seq.item 0
 
+let rec runAheadRunsIntoLoop map dim route pos dir = 
+    let nextPos = getNextPos pos dir
+    route |> List.contains (pos, dir) || 
+        if leavesMap dim nextPos
+        then false
+        else if isObstacle map nextPos
+             then runAheadRunsIntoLoop map dim route nextPos dir
+             else runAheadRunsIntoLoop map dim (route @ [nextPos, dir]) nextPos (rotate dir)
+
 let dim (map: MapLayout) =
     let dimX = map.Count
     if dimX = 0
     then (0, 0)
     else (dimX, map.Values |> Seq.map (fun f -> f |> Seq.length) |> Seq.distinct |> singleElement)
 
-let rec runAheadRunsIntoLoop dim route pos dir = 
-    let nextPos = getNextPos pos dir
-    route |> List.contains (pos, dir) || 
-        if leavesMap dim nextPos
-        then false
-        else runAheadRunsIntoLoop dim route nextPos dir
-
-
 let rec wouldBuildLoop game =
     let map, pos, dir, route = game
 
     let rotatedDir = rotate dir
     let dimOfMap = dim map
-    route |> List.contains (pos, rotatedDir) || runAheadRunsIntoLoop dimOfMap route pos rotatedDir
+    route |> List.contains (pos, rotatedDir) || runAheadRunsIntoLoop map dimOfMap route pos rotatedDir
 
 let playMove game =
     let map, pos, dir, route = game
@@ -127,7 +128,7 @@ let playMove game =
     then (map, pos, dir, (route @ [pos, dir])), true, None
     else
         if isObstacle map nextPos
-        then (map, pos, (rotate dir), route), false, None
+        then (map, pos, (rotate dir), route @ [pos, dir]), false, None
         else (map, nextPos, dir, (route @ [pos, dir])), false, if wouldBuildLoop game
                                                                then Some nextPos
                                                                else None
