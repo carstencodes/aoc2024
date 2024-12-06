@@ -123,11 +123,15 @@ let rec willGetSameRoute map dimensions position direction =
     let nextPos = getNextPos position direction
     let leftMap = leavesMap dimensions nextPos
     let directionIsSame = not (leftMap) && goesIntoDirection map nextPos direction
+    let isObstacleHit = not(leftMap) && isObstacle map nextPos
     if directionIsSame
     then true
     else if leftMap
           then false
-          else willGetSameRoute map dimensions nextPos direction
+          else 
+            if isObstacleHit
+            then willGetSameRoute map dimensions position (rotate direction)
+            else willGetSameRoute map dimensions nextPos direction
 
 let playMove game =
     let mapInstance, pos, dir = game
@@ -149,10 +153,11 @@ let playMove game =
 
     let posAhead = getNextPos pos (rotate dir)
     
-    let rule1Matches = nextIsFree && curIsTurn
-    let rule2Matches = nextIsFree && curIsVisitedInTurnedDirection 
-    let rule4to6Matches = nextIsFree && willGetSameRoute map mapSize posAhead (rotate dir)
-    let rule3Matches = false
+    let willCreateSameRoute = nextIsFree && willGetSameRoute map mapSize posAhead (rotate dir)
+
+    let ruleApplies = nextIsFree && (
+        curIsTurn || curIsVisitedInTurnedDirection || willCreateSameRoute
+    )
     
     let couldReplace v =
         match v with
@@ -179,7 +184,7 @@ let playMove game =
     let newMap = map |> Map.change pos couldReplace
 
     let newMap = 
-        if (rule1Matches || rule2Matches || rule3Matches || rule4to6Matches)
+        if (ruleApplies)
         then newMap |> Map.change nextPos couldReplaceByAssumedObstacle
         else newMap
 
