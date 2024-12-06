@@ -130,7 +130,7 @@ let rec willGetSameRoute map dimensions position direction =
           then false
           else 
             if isObstacleHit
-            then willGetSameRoute map dimensions position (rotate direction)
+            then false// willGetSameRoute map dimensions position (rotate direction)
             else willGetSameRoute map dimensions nextPos direction
 
 let playMove game =
@@ -393,7 +393,7 @@ let input = """.#....#...................#................#.....................
 .............#.......................................................#.........#..................................................
 ....#.................................#...............#.....#....#......##..............#.......................#........#........"""
 
-let parsed = parse example
+let parsed = parse input
 let finished = playGame parsed
 printGame parsed
 
