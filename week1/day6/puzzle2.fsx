@@ -6,24 +6,27 @@ type Direction =
 
 type MapContentPart = 
     | Free
+    | Visited of Direction
+    | Turn
     | Obstacle
+    | AssumedObstacle
 
 type PointInMap = int * int
-type Route = (PointInMap * Direction) list
 
-type MapLayout = Map<int, Map<int, MapContentPart>>
+type MapDimension = int * int
 
-type Game = MapLayout * PointInMap * Direction * Route
+type MapLayout = Map<PointInMap, MapContentPart> 
+
+type MapInstance = MapLayout * MapDimension
+
+type Game = MapInstance * PointInMap * Direction
 
 
 let routePartToPointInRoute a =
     let pos, _ = a
     pos
 
-let printGameWithObstacles (g: Game) obstacle =
-    let matchInRoute route i j =
-        route |> List.contains (i, j)
-
+let printGame (g: Game) =
     let curPos i j pos =
         (i, j) = pos
 
@@ -34,30 +37,32 @@ let printGameWithObstacles (g: Game) obstacle =
         | Left -> '<'
         | Down -> 'v'
 
-    let map, pos, dir, routeWithDir = g
-    let route = routeWithDir |> List.map routePartToPointInRoute
+    let visitedToChar dir =
+        match dir with
+        | Up -> '|'
+        | Right -> '-'
+        | Left -> '-'
+        | Down -> '|'
 
-    for i in [0..(map.Count-1)] do
-        let line = map[i]
-        for j in [0..(line.Count-1)] do
-            let content = line[j]
+    let mapInstance, pos, dir = g
+    let map, dimensions = mapInstance
+    let maxX, maxY = dimensions
+
+    for i in [0..(maxX-1)] do
+        for j in [0..(maxY-1)] do
+            let content = map[(i, j)]
             let char = 
                 match content with
                 | Obstacle -> '#'
-                | Free -> 
-                    if matchInRoute obstacle i j 
-                    then 'O'
-                    else 
-                        if curPos i j pos
-                        then dirToChar dir
-                        else    
-                            if obstacle |> List.length = 0 && matchInRoute route i j 
-                            then 'X'
-                            else '.'
+                | Visited d -> 
+                          if curPos i j pos
+                          then dirToChar dir
+                          else visitedToChar d
+                | Turn -> '+'
+                | AssumedObstacle -> 'O'
+                | Free -> '.'
             printf "%c" char
         printfn ""
-
-let printGame (g: Game) = printGameWithObstacles g []
 
 let getNextPos pos dir =
     let i, j = pos
@@ -68,9 +73,7 @@ let getNextPos pos dir =
     | Down -> (i+1, j)
 
 let isObstacle (map: MapLayout) postion =
-    let i, j = postion
-    let line = map[i]
-    let point = line[j]
+    let point = map[postion]
 
     point = Obstacle
 
@@ -90,19 +93,6 @@ let rotate dir =
     | Down -> Left
     | Left -> Up
 
-let singleElement seq =
-    if (seq |> Seq.length <> 1) 
-    then
-        printfn "%A" seq
-        failwith "Sequence contains more than one item"
-    else seq |> Seq.item 0
-
-let dim (map: MapLayout) =
-    let dimX = map.Count
-    if dimX = 0
-    then (0, 0)
-    else (dimX, map.Values |> Seq.map (fun f -> f |> Seq.length) |> Seq.distinct |> singleElement)
-
 let rec runAheadRunsIntoLoop dim route pos dir = 
     let nextPos = getNextPos pos dir
     route |> List.contains (pos, dir) || 
@@ -111,61 +101,62 @@ let rec runAheadRunsIntoLoop dim route pos dir =
         else runAheadRunsIntoLoop dim route nextPos dir
 
 
-let rec wouldBuildLoop game =
-    let map, pos, dir, route = game
-
-    let rotatedDir = rotate dir
-    let dimOfMap = dim map
-    route |> List.contains (pos, rotatedDir) || runAheadRunsIntoLoop dimOfMap route pos rotatedDir
-
 let playMove game =
-    let map, pos, dir, route = game
-    let mapSize = dim map
+    let mapInstance, pos, dir = game
+    let map, mapSize = mapInstance
     let nextPos = getNextPos pos dir
 
-    if leavesMap mapSize nextPos
-    then (map, pos, dir, (route @ [pos, dir])), true, None
-    else
-        if isObstacle map nextPos
-        then (map, pos, (rotate dir), route), false, None
-        else (map, nextPos, dir, (route @ [pos, dir])), false, if wouldBuildLoop game
-                                                               then Some nextPos
-                                                               else None
+    let mapLeft = leavesMap mapSize nextPos
 
+    let hitsObstacle = not (mapLeft) && isObstacle map nextPos
+
+    let nextValue = 
+        if hitsObstacle
+        then Turn
+        else Visited dir
+
+    let newMap = map |> Map.change pos (fun v -> 
+            match v with
+            | Some s -> 
+                match s with
+                | Free -> Some (nextValue)
+                | Turn -> Some Turn
+                | Obstacle -> Some Obstacle
+                | AssumedObstacle -> Some AssumedObstacle
+                | Visited v -> Some (Visited v)
+            | None -> None
+        )
+
+    let mapInstance = newMap, mapSize
+
+    if mapLeft
+    then (mapInstance, pos, dir), true
+    else
+        if hitsObstacle
+        then (mapInstance, pos, (rotate dir)), false
+        else (mapInstance, nextPos, dir), false
 
 let playGame game =
     let mutable currentGame, finished = game, false
 
     while not finished do
-        let nextGame, nextFinished, _ = playMove currentGame
+        let nextGame, nextFinished = playMove currentGame
         currentGame <- nextGame
         finished <- nextFinished
 
     currentGame
 
-let playGameWithObstacles game =
-    let mutable currentGame, finished , newObstacles= game, false, []
-
-    while not finished do
-        let nextGame, nextFinished, nextObstacle = playMove currentGame
-        match nextObstacle with
-        | Some p  ->
-            newObstacles <- newObstacles @ [p]
-        | _ -> ()
-        currentGame <- nextGame
-        finished <- nextFinished
-        
-    currentGame, newObstacles
-
-
 let parse (t: string) =
     let lines = t.Split System.Environment.NewLine
-    let mutable gameMap = Map.empty<int, Map<int, MapContentPart>>
+    let mutable gameMap = Map.empty<PointInMap, MapContentPart>
 
     let mutable position = (-1, -1)
     let mutable currentDirection = Up
+    let mutable maxX= 0
+    let mutable maxY = 0
 
     for i in [0 .. ((lines |> Array.length) - 1)] do
+        maxX <- max maxX (i+1)
         let changePositionAndMarkAsNoObstacle i j dir = 
             position <- (i, j)
             currentDirection <- dir
@@ -182,6 +173,7 @@ let parse (t: string) =
         let mutable lineMap = Map.empty<int, MapContentPart>
         let indexedLine = Array.indexed line
         for (j, part) in indexedLine do
+            maxY <- max maxY (j+1)
             let content = 
                 match part with
                 | '#' -> Obstacle
@@ -189,14 +181,13 @@ let parse (t: string) =
                 | ('^' | '>' | '<' | 'v') -> changePositionAndMarkAsNoObstacle i j (parseDirection part)
                 | _ -> failwithf "Unexpected character %c" part
 
-            lineMap <- lineMap |> Map.add j content
-        gameMap <- gameMap |> Map.add i lineMap
+            gameMap <- gameMap |> Map.add (i, j) content
 
     let x, y = position
     assert (x >= 0)
     assert (y >= 0)
 
-    (gameMap, position, currentDirection, [])
+    ((gameMap, (maxX, maxY)), position, currentDirection)
                 
 
 let example = """....#.....
@@ -342,13 +333,25 @@ let input = """.#....#...................#................#.....................
 ....#.................................#...............#.....#....#......##..............#.......................#........#........"""
 
 let parsed = parse example
-let finished, newObstacles = playGameWithObstacles parsed
+let finished = playGame parsed
 printGame parsed
-
-// let _, _, _, route = finished
 
 printfn "%s" "--------------------------------------------------------------------"
 
-printGameWithObstacles finished newObstacles
+printGame finished
 
-printfn "%i" (newObstacles |> List.distinct |> List.length)
+let mapInstance , _, _ = finished
+
+let map, _ = mapInstance
+
+let isVisited p =
+    match p with
+    | Free -> false
+    | Obstacle -> false
+    | _ -> true
+
+printfn "%A" map
+
+let visited = map.Values |> Seq.toList |> List.filter isVisited 
+
+printfn "%i" (visited |> List.length)
