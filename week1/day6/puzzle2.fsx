@@ -45,13 +45,13 @@ let printGameWithObstacles (g: Game) obstacle =
                 match content with
                 | Obstacle -> '#'
                 | Free -> 
-                    if curPos i j pos
-                    then dirToChar dir
-                    else
-                        if matchInRoute obstacle i j 
-                        then 'O'
-                        else 
-                            if matchInRoute route i j 
+                    if matchInRoute obstacle i j 
+                    then 'O'
+                    else 
+                        if curPos i j pos
+                        then dirToChar dir
+                        else    
+                            if obstacle |> List.length = 0 && matchInRoute route i j 
                             then 'X'
                             else '.'
             printf "%c" char
@@ -103,30 +103,20 @@ let dim (map: MapLayout) =
     then (0, 0)
     else (dimX, map.Values |> Seq.map (fun f -> f |> Seq.length) |> Seq.distinct |> singleElement)
 
-let rec gameRunsIntoLoop game = 
-    let map, pos, dir, route = game
-    let mapSize = dim map
+let rec runAheadRunsIntoLoop dim route pos dir = 
     let nextPos = getNextPos pos dir
-
-    if route |> List.contains (nextPos, dir)
-    then true
-    else 
-        if leavesMap mapSize nextPos
+    route |> List.contains (pos, dir) || 
+        if leavesMap dim nextPos
         then false
-        else
-            if isObstacle map nextPos
-            then gameRunsIntoLoop (map, pos, (rotate dir), route)
-            else gameRunsIntoLoop (map, nextPos, dir, (route @ [nextPos, dir]))
+        else runAheadRunsIntoLoop dim route nextPos dir
+
 
 let rec wouldBuildLoop game =
     let map, pos, dir, route = game
 
     let rotatedDir = rotate dir
-    let newPos = getNextPos pos rotatedDir
-
-    let newPotentialGame = map, newPos, rotatedDir, (route @ [newPos, rotatedDir])
-
-    route |> List.contains (newPos, rotatedDir) || gameRunsIntoLoop newPotentialGame
+    let dimOfMap = dim map
+    route |> List.contains (pos, rotatedDir) || runAheadRunsIntoLoop dimOfMap route pos rotatedDir
 
 let playMove game =
     let map, pos, dir, route = game
@@ -351,7 +341,7 @@ let input = """.#....#...................#................#.....................
 .............#.......................................................#.........#..................................................
 ....#.................................#...............#.....#....#......##..............#.......................#........#........"""
 
-let parsed = parse input
+let parsed = parse example
 let finished, newObstacles = playGameWithObstacles parsed
 printGame parsed
 
