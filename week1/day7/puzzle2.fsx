@@ -104,11 +104,16 @@ let findSolutionFromGivenSolutions testValue solutionsProvided =
 
 let findSolution (testValue: TestValue) : Option<Solution> =
     let _, values = testValue
-    let foundSolution = findSolutionFromGivenSolutions testValue (getPossibleSolutions ((values |> Array.length) - 1))
+    let possibleSolutions = (getPossibleSolutions ((values |> Array.length) - 1))
+    let foundSolution = findSolutionFromGivenSolutions testValue possibleSolutions
 
     let foundSolution = match foundSolution with
                             | Some s -> Some s
-                            | None -> findSolutionFromGivenSolutions testValue (getPossibleSolutionsWithCombine ((values |> Array.length) - 1)) 
+                            | None -> 
+                                let newPossibleSolutions = 
+                                    (getPossibleSolutionsWithCombine ((values |> Array.length) - 1))
+                                        |> Array.filter (fun v -> not (possibleSolutions |> Array.contains v))
+                                findSolutionFromGivenSolutions testValue newPossibleSolutions
 
     foundSolution
 
