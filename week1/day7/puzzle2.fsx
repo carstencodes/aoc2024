@@ -72,8 +72,8 @@ let rec getPossibleSolutionsWithCombine length: OperatorArray array =
 
     if length > 1
     then 
-        let operations = getPossibleSolutions (length - 1)
-        for operator in [Add; Multiply] do
+        let operations = getPossibleSolutionsWithCombine (length - 1)
+        for operator in [Add; Multiply; Combine] do
             let operatorArray = [|operator|]
             for operation in operations do
                 let newOperations = Array.concat [operatorArray; operation]
@@ -84,7 +84,7 @@ let rec getPossibleSolutionsWithCombine length: OperatorArray array =
     result
         
 
-let findSolutionClassic testValue solutionsProvided =
+let findSolutionFromGivenSolutions testValue solutionsProvided =
     let mutable firstSolution = None
     let result, values = testValue
 
@@ -104,11 +104,11 @@ let findSolutionClassic testValue solutionsProvided =
 
 let findSolution (testValue: TestValue) : Option<Solution> =
     let _, values = testValue
-    let foundSolution = findSolutionClassic testValue (getPossibleSolutions ((values |> Array.length) - 1))
+    let foundSolution = findSolutionFromGivenSolutions testValue (getPossibleSolutions ((values |> Array.length) - 1))
 
     let foundSolution = match foundSolution with
                             | Some s -> Some s
-                            | None -> findSolutionClassic testValue (getPossibleSolutionsWithCombine ((values |> Array.length) - 1)) 
+                            | None -> findSolutionFromGivenSolutions testValue (getPossibleSolutionsWithCombine ((values |> Array.length) - 1)) 
 
     foundSolution
 
@@ -998,7 +998,7 @@ let input = """64288413730: 91 79 4 9 7 8 91 7 30
 921274333: 376 926 6 63 86 2 3 1 7
 540968278: 7 118 76 275"""
 
-let parsed = parse example
+let parsed = parse input
 
 let solved: Solution array = findSolutions parsed
 
