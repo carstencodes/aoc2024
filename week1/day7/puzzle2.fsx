@@ -51,38 +51,65 @@ let isValidSolution operators result values =
 
     isSolution
 
-let rec getPossibleSolutions length: OperatorArray array =
-    let mutable result: OperatorArray array = [||]
-
-    if length > 1
-    then 
-        let operations = getPossibleSolutions (length - 1)
-        for operator in [Add; Multiply] do
-            let operatorArray = [|operator|]
-            for operation in operations do
-                let newOperations = Array.concat [operatorArray; operation]
-                result <- Array.append result [|newOperations|]
-    else 
-        result <- [| [|Add|] ; [|Multiply|] |]
-
-    result
-
-let rec getPossibleSolutionsWithCombine length: OperatorArray array =
-    let mutable result: OperatorArray array = [||]
-
-    if length > 1
-    then 
-        let operations = getPossibleSolutionsWithCombine (length - 1)
-        for operator in [Add; Multiply; Combine] do
-            let operatorArray = [|operator|]
-            for operation in operations do
-                let newOperations = Array.concat [operatorArray; operation]
-                result <- Array.append result [|newOperations|]
-    else 
-        result <- [| [|Add|] ; [|Multiply|] ; [|Combine|] |]
+let rec getPossibleSolutions length: OperatorArray seq =
+    let result: OperatorArray seq = seq {
+        if length > 1
+        then 
+            let operations = getPossibleSolutions (length - 1)
+            for operator in [Add; Multiply] do
+                let operatorArray = [|operator|]
+                for operation in operations do
+                    let newOperations = Array.concat [operatorArray; operation]
+                    yield newOperations
+        else 
+            yield [|Add|] 
+            yield [|Multiply|]
+    }
 
     result
-        
+
+let rec getPossibleSolutionsWithCombine length: OperatorArray seq =
+    let mutable result: OperatorArray seq = seq {
+        if length > 1
+        then 
+            let operations = getPossibleSolutionsWithCombine (length - 1)
+            for operator in [Add; Multiply; Combine] do
+                let operatorArray = [|operator|]
+                for operation in operations do
+                    let newOperations = Array.concat [operatorArray; operation]
+                    yield newOperations
+        else 
+            yield [|Add|] 
+            yield [|Multiply|] 
+            yield [|Combine|]
+    }
+    result
+
+let rec solveRecursive result currentValue values operators sequence : option<Operator list>=
+    let result =
+        if (values |> Array.length = 0)
+        then 
+            if currentValue = result
+            then Some sequence
+            else None
+        else 
+            if (currentValue <= result)
+            then 
+                let head = values |> Array.head
+                let tail = values |> Array.tail
+                let mutable currentSolution = None
+
+                for op in operators do
+                    let nextValue = evaluate op currentValue head
+                    let possibleSolution = solveRecursive result nextValue tail operators (sequence @ [op])
+                    match possibleSolution with
+                    | Some s -> 
+                        currentSolution <- Some s
+                    | None -> ()
+
+                currentSolution
+            else None
+    result
 
 let findSolutionFromGivenSolutions testValue solutionsProvided =
     let mutable firstSolution = None
@@ -92,9 +119,9 @@ let findSolutionFromGivenSolutions testValue solutionsProvided =
 
     let isValidSolutionForProblem solution = isValidSolution solution result values
 
-    while (firstSolution = None && (solutions |> Array.length) > 0) do
-        let solution = solutions |> Array.head
-        solutions <- solutions |> Array.tail
+    while (firstSolution = None && (solutions |> Seq.length) > 0) do
+        let solution = solutions |> Seq.head
+        solutions <- solutions |> Seq.tail
 
         if (isValidSolutionForProblem solution)
         then
@@ -102,20 +129,44 @@ let findSolutionFromGivenSolutions testValue solutionsProvided =
 
     firstSolution
 
+let isValueSolution ol vl =
+    (ol |> List.length) = ((vl |> Array.length) - 1)
+
 let findSolution (testValue: TestValue) : Option<Solution> =
-    let _, values = testValue
-    let possibleSolutions = (getPossibleSolutions ((values |> Array.length) - 1))
+    (*
+        let _, values = testValue
+    let possibleSolutions = (getPossibleSolutions ((values |> Array.length) - 1)) |> Seq.toArray
     let foundSolution = findSolutionFromGivenSolutions testValue possibleSolutions
 
     let foundSolution = match foundSolution with
                             | Some s -> Some s
                             | None -> 
                                 let newPossibleSolutions = 
-                                    (getPossibleSolutionsWithCombine ((values |> Array.length) - 1))
-                                        |> Array.filter (fun v -> not (possibleSolutions |> Array.contains v))
+                                    (getPossibleSolutionsWithCombine ((values |> Array.length) - 1) |> Seq.except possibleSolutions)
                                 findSolutionFromGivenSolutions testValue newPossibleSolutions
 
-    foundSolution
+    *)
+
+    let result, values = testValue
+
+    let head = values |> Array.head
+    let tail = values |> Array.tail
+
+    let solution: option<Operator list> = solveRecursive result head tail[|Add; Multiply|] []
+
+    match solution with
+    | Some s ->
+        if (isValueSolution s values)
+        then Some (testValue, s |> List.toArray)
+        else None
+    | None -> 
+        let solution: option<Operator list> = solveRecursive result head tail[|Add; Multiply; Combine|] []
+        match solution with
+        | Some s ->
+            if (isValueSolution s values)
+            then Some (testValue, s |> List.toArray)
+            else None
+        | None -> None
 
 let findSolutions (testValues: TestValues) =
     let total = testValues |> Array.length
@@ -126,7 +177,7 @@ let findSolutions (testValues: TestValues) =
         remaining <- remaining - 1
         findSolution testValue
 
-    testValues |> Array.Parallel.mapi findSolution_i |> Array.choose id
+    testValues |> Array.map findSolution |> Array.choose id
 
 let parse (t: string) = 
 
