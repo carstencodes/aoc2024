@@ -118,7 +118,15 @@ let findSolution (testValue: TestValue) : Option<Solution> =
     foundSolution
 
 let findSolutions (testValues: TestValues) =
-    testValues |> Array.map findSolution |> Array.choose id
+    let total = testValues |> Array.length
+    let mutable remaining  = total
+
+    let findSolution_i i testValue =
+        printfn "[%i/%i] %A, %i remaining" i total testValue remaining
+        remaining <- remaining - 1
+        findSolution testValue
+
+    testValues |> Array.Parallel.mapi findSolution_i |> Array.choose id
 
 let parse (t: string) = 
 
