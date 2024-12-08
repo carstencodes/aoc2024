@@ -212,6 +212,24 @@ let isVisitedOrFreeNextToVisited (game: MapLayout) i j =
     | ObstacleWaypoint -> false
     | FreeWaypoint -> false //isNextToVisited game i j
 
+let isCrossingInFinishedGame (map: MapLayout) (pos: PointInMap) dirInGame = 
+    let dimOfMap = dim map
+    let i, j = pos
+
+    match dirInGame with
+    | None -> false
+    | Some dir -> 
+        let turned = rotate dir
+        let nextPos = getNextPos pos dir
+        if (leavesMap dimOfMap nextPos)
+        then false
+        else
+            let a, b = nextPos
+            let p = map[a][b]
+            match p with
+            | VisitedWaypoint ndir -> ndir = turned
+            | TurningWaypoint (_, ndir) -> ndir = turned
+            | _ -> false
 
 let cloneGame (game: MapLayout) i j =
     let mutable gameCopy = Map.empty<int, Map<int, Waypoint>>
@@ -421,9 +439,15 @@ let mutable obstructions = []
 //    let line = game[i]
     //for j in [0..(line.Count - 1)] do
 for pos in route do
-        let i, j = pos
+    let i, j = pos
+    let dir = 
+        match game[i][j] with
+        | VisitedWaypoint v -> Some v
+        | TurningWaypoint (_, t) -> Some t
+        | _ -> None
+    if isCrossingInFinishedGame game (i, j) dir
     //if isVisitedOrFreeNextToVisited game i j
-    //then
+    then
         let gameIJ = cloneGame game i j
         
         if (playWithObstructions (gameIJ, startPos, startDir, []) (i, j))
