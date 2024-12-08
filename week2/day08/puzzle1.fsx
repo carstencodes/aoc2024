@@ -221,7 +221,7 @@ E.D..S...............................4.....2......
 Y................P.U..........3...........d.......
 ...U..................................3..........."""
 
-let map = parse example
+let map = parse input
 
 let mapWithAntinodes, antinodes = findAntinodes map
 
