@@ -218,11 +218,11 @@ E.D..S...............................4.....2......
 Y................P.U..........3...........d.......
 ...U..................................3..........."""
 
-let map = parse example
+let map = parse input
 
 let mapWithAntinodes, antinodes = findAntinodes map
 
-let _, _, antennas = mapWithAntinodes
+let layout, dim, antennas = mapWithAntinodes
 
 printMap mapWithAntinodes
 
@@ -235,14 +235,19 @@ let getAntinodesCount (nodes: AntennaPositions) =
 
     setOfNodes |> List.distinct |> List.length
 
-let getAntennasThatAreAntiNodes (nodes: AntennaPositions) (ants: AntennaPositions) =
-    let mutable setOfNodes = []
-    let addAntiNodesToSet (c: Point seq) = 
-        setOfNodes <- setOfNodes @ (c |> Seq.toList)
+let getAntennasAndAntinodes (map: MapLayout) dimensions =
+    let mutable count = 0
+    let maxI, maxJ = dimensions
+    for i in [0..(maxI - 1)] do
+        for j in [0..(maxJ - 1)] do
+            let point = map[i][j]
+            match point with
+            | Antinode _ -> count <- count + 1
+            | AntennaAndAntinode (_, _) -> count <- count + 1
+            | Antenna (_) -> count <- count + 1
+            | _ -> ()
+    
+    count
 
-    nodes.Values |> Seq.iter addAntiNodesToSet
-
-    setOfNodes |> List.distinct |> List.length
-
-
-printfn "%i" ((getAntinodesCount antinodes) + (getAntennasThatAreAntiNodes antinodes antennas))
+printfn "%i" (getAntinodesCount antinodes)
+printfn "%i" (getAntennasAndAntinodes layout dim)
