@@ -53,17 +53,11 @@ let staysInsideMap dimensions node =
 
     let inBounds = not(aOutOfBounds) && not(bOutOfBounds)
 
-    printfn "%i %i %i %b" 0 a maxA aOutOfBounds
-    printfn "%i %i %i %b" 0 b maxB bOutOfBounds
-    printfn "%b" inBounds
-
     inBounds
 
 let findAntinodeForAntenna dimensions current next = 
     let difference = distance current next
     let antinode = addPoint next difference
-
-    printfn "%A %A %A %A %A" current next difference antinode dimensions
 
     if staysInsideMap dimensions antinode
     then Some antinode
@@ -83,8 +77,6 @@ let findAntinodes (map: MapInstance) =
 
             let antennaNodesLeft = antennasLeft |> Seq.map antinodesForCurrentAntenna |> Seq.choose id |> Seq.toList
 
-            printfn "%A" antennaNodesLeft
-            
             antinodes <- antinodes |> Map.change frequency (fun q ->
                 match q with 
                 | Some s -> Some (s @ antennaNodesLeft)
@@ -116,7 +108,6 @@ let findAntinodes (map: MapInstance) =
                 | None -> None
                 )
          
-    printfn "%A -> %A" antennas antinodes
     (newMapLayout, dim, antennas), antinodes
 
 let parse (t: string) =
