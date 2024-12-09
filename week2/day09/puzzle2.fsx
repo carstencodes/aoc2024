@@ -137,21 +137,13 @@ let getFreeSpaces fs  =
     
     result
 
-let getMovableFileFsEntry (filesAndFileRanges: Map<uint64, (int * int)>) index count maxLen =
-    let maxFileId = filesAndFileRanges.Keys |> Seq.max
-    let mutable result = None
-    for fsId in ([0UL..maxFileId] |> List.rev) do
-        if result = None && filesAndFileRanges.ContainsKey (fsId)
-        then
-            let range =filesAndFileRanges[fsId]
-            let start, length = range
-            // printfn "%i %d %i<->%i %A" start fsId length maxLen filesAndFileRanges
-            if length <= maxLen
-            then
-                result <- Some (fsId, start, length)
+let updateList lst index newValue =
+    let updateListByIndex i v =
+        if i <> index
+        then v
+        else newValue
+    lst |> List.mapi updateListByIndex
 
-    result
-    
 
 let defrag_together_best_match fs = 
     let mutable filesAndFileRanges = getFileRanges fs
@@ -160,28 +152,44 @@ let defrag_together_best_match fs =
     let mutable resultFs = fs
 
     let count = fs |> List.length
-    let mutable index = 0
+    let maxFileId = filesAndFileRanges.Keys |> Seq.max
+    let mutable fileId = maxFileId
+    let mutable counter = 0UL
 
-    while (index < count && (freeSpaces |> List.length > 0)) do
-        let freeSpace = freeSpaces |> List.head
-        freeSpaces <- freeSpaces |> List.tail
-        let start, length = freeSpace
-        index <- start
+    while ((counter <= maxFileId) && (freeSpaces |> Seq.length > 0)) do
+        printfn "Processing %i of %i: FS ID %i with %i freespaces left" counter count fileId (freeSpaces |> Seq.length)
+        if filesAndFileRanges.ContainsKey(fileId)
+        then
+            let fileOnDisk = filesAndFileRanges[fileId]
+            let fileStart, fileLength= fileOnDisk
 
-        let movable = getMovableFileFsEntry filesAndFileRanges index count length
-        match movable with
-        | None -> 
-            index <- count
-        | Some entry ->
-            let fsId, moveFromStart, swapLength = entry
+            let mutable index = 0
+            while (index < (freeSpaces |> Seq.length)) do
+                let freeSpace = freeSpaces.[index]
+                let start, length = freeSpace
 
-            resultFs <- swapMultiple resultFs index moveFromStart swapLength
-            if (swapLength < length)
-            then
-                freeSpaces <- (start + swapLength, length - swapLength) :: freeSpaces
-            filesAndFileRanges <- filesAndFileRanges |> Map.remove fsId
-            index <- index + swapLength
+                if (start > fileStart)
+                then
+                    index <- count
+                else
+                    if (length >= fileLength)
+                    then
+                        resultFs <- swapMultiple resultFs start fileStart fileLength
+                        let newStart = start + fileLength
+                        let newLength =  length - fileLength
+                        if newLength > 0
+                        then
+                            let freeSpace = (newStart, newLength)
+                            freeSpaces <- updateList freeSpaces index freeSpace
+                        else
+                            freeSpaces <- freeSpaces |> List.removeAt index
+                        index <- count
+                    else
+                        index <- index + 1
+            filesAndFileRanges <- filesAndFileRanges |> Map.remove fileId
 
+        counter <- counter + 1UL
+        fileId <- (maxFileId - counter)
     
     resultFs
 
