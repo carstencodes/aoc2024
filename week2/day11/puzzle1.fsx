@@ -32,13 +32,32 @@ let rec play stones rounds =
         play newStones (rounds - 1)
     else stones
 
+let rec playStoneRecursive stone round =
+    let mutable sum = 0
+    if (round > 0)
+    then 
+        let stones = playStone stone
+        for nextStone in stones do
+            sum <- sum + playStoneRecursive nextStone (round - 1)
+        sum
+    else
+        1
+
+let playStonesIterative stones rounds =
+    let mutable sum = 0
+    for stone in stones do
+        sum <- sum + playStoneRecursive stone rounds
+    sum
+
 let example = "125 17"
 let input = "572556 22 0 528 4679021 1 10725 2790"
 
 let stones  = parse input
 
-let stonesAfterPlay = play stones 25
+//let stonesAfterPlay = playStones stones 25
 
-let numberOfStones = stonesAfterPlay |> List.length
+//let numberOfStones = stonesAfterPlay |> List.length
+
+let numberOfStones = playStonesIterative stones 25
 
 printfn "%i" numberOfStones
