@@ -67,111 +67,71 @@ let calculatePrice (areasAndPerimetersByPlant: PlantAreaAndPerimeters list) =
 
     areasAndPerimetersByPlant |> List.map priceOfSinglePlantArea |> List.sum
 
-let pointAbove p =
-    let i, j = p
+let getNeighbors point =
+    let i, j = point
+    seq {
+        yield ((i-1), j)
+        yield ((i+1), j)
+        yield (i, (j-1))
+        yield (i, (j+1))
+    }
 
-    i, (j - 1)
+let buildAdjacenceLists points =
+    let isPoint p =
+        points |> List.contains p
+    let mutable result = Map.empty<Point, Point list>
+    for point in points do
+        let neighbors = getNeighbors point |> Seq.filter isPoint |> Seq.toList
+        result <- result |> Map.add point neighbors
 
-let pointLeft p =
-    let i, j = p
+    result
 
-    (i - 1), j
+let rec getAreas (adjacenceLists: Map<Point, Point list>): Area list =
+    let rec traverseAdjacenceList point allPoints =
+        let mutable points = allPoints |> Set.add point
+        
+        for nextPoint in adjacenceLists[point] do
+            if (not (Set.contains nextPoint points))
+            then 
+                points <- points |> Set.union (traverseAdjacenceList nextPoint points)
 
-let pointRight p =
-    let i, j = p
+        points
 
-    (i + 1), j
+    let mutable areas = []
 
-let pointUpRight p =
-    let i, j = p
+    let mutable pointsToVisit = adjacenceLists.Keys |> Seq.toList
 
-    (i + 1), (j - 1)
+    while not(pointsToVisit.IsEmpty) do
+        let point = pointsToVisit.Head
 
-let comparePoints p q =
-    let pi, pj = p
-    let qi, qj = q
+        let pointsInGraph = traverseAdjacenceList point Set.empty<Point>
 
-    if pi <> qi
-    then compare pi qi
-    else compare pj qj
+        pointsToVisit <- pointsToVisit |> List.except (pointsInGraph)
 
-let singleValueOnly (list: int list) : int =
-    match list with 
-    | head :: [] -> head
-    | _ -> failwithf "List does not contain exactly one item: %A" list
+        printfn ">%A %A" pointsInGraph pointsToVisit
+        areas <- areas @ [pointsInGraph |> Set.toList]
 
-let haveCommonElements list1 list2 =
-    ([list1; list2] |> List.concat |> List.distinct |> List.length) <> (list1.Length + list2.Length)
-
-let selectI (p: Point): int =
-        let i, _ = p
-        i
-let selectJ (p: Point): int =
-    let _, j = p
-    j
-
-let areasTouch (row1: Point list) (row2: Point list): bool =
-    if row1.Length = 0 || row2.Length = 0
-    then false
-    else 
-        let j1 = singleValueOnly (row1 |> List.map selectJ)
-        let j2 = singleValueOnly (row2 |> List.map selectJ)
-
-        if (abs (j1 - j2)) <> 1
-        then false
-        else 
-            let i1s = row1 |> List.map selectI
-            let i2s = row2 |> List.map selectI
-
-            haveCommonElements i1s i2s
-
-let pointsOfRow (points: Point list) (point: Point): Point list  =
-    let i, _ = point
-
-    let pointHasI p =
-        let ii, _ = p
-
-        ii = i
-
-    points |> List.filter pointHasI
+    areas
     
-
 let divide (garden: Garden): AreasByPlant = 
     let _, plantList = garden
     let mutable result: AreasByPlant = Map.empty<Plant, Area list>
 
     for plant in plantList.Keys do
-        let mutable areasForPlant: Area list = []
-        let mutable currentArea: Area = []
-        let mutable remainingPoints = plantList[plant] |> List.sortWith comparePoints
+        let mutable areas = []
+        let points = plantList[plant]
+        let adjacenceLists = buildAdjacenceLists points
 
-        while not(remainingPoints.IsEmpty) do
-            let point = remainingPoints.Head
-            let above = pointAbove point
-            if (currentArea.IsEmpty) || (currentArea |> List.contains above) || (currentArea |> List.contains (pointLeft point) || 
-                (areasTouch (pointsOfRow currentArea above) (pointsOfRow remainingPoints point)) )
-            then 
-                currentArea <- currentArea @ [point]
-            else 
-                areasForPlant <- areasForPlant @ [currentArea]
-                currentArea <- [point]
-
-            remainingPoints <- remainingPoints.Tail
-
-        if not (currentArea.IsEmpty)
-        then 
-            areasForPlant <- areasForPlant @ [currentArea]
-
+        let areasForPlant = getAreas adjacenceLists
         result <- result |> Map.add plant areasForPlant
 
     result
 
 let parse (t: string): Garden =
     let mutable mapResult = Map.empty<int, Map<int, Plant>>
-    let mutable dimI = 0
-    let mutable dimJ = 0
     let mutable plantPoints = Map.empty<Plant, Point List>
 
+    let mutable i = 0
     for line in t.Split System.Environment.NewLine do
         let mutable j = 0
         let mutable mapLine = Map.empty<int, Plant>
@@ -179,7 +139,7 @@ let parse (t: string): Garden =
             if (not (plantPoints.ContainsKey(plant)))
             then plantPoints <- plantPoints |> Map.add plant []
 
-            let p = (dimI, j)
+            let p = (i, j)
             plantPoints <- plantPoints |> Map.change plant (fun item -> 
                 match item with
                 | Some t -> Some (t @ [p])
@@ -189,11 +149,12 @@ let parse (t: string): Garden =
             mapLine <- mapLine |> Map.add j plant
             j <- j + 1
 
-        mapResult <- mapResult |> Map.add dimI mapLine
+        mapResult <- mapResult |> Map.add i mapLine
+        i <- i + 1
 
-        dimI <- dimI + 1
-        dimJ <- max dimJ j
-    
+    let dimI = mapResult.Keys |> Seq.length
+    let dimJ = mapResult.Values |> Seq.map (fun f -> f.Keys.Count) |> Seq.distinct |> Seq.exactlyOne
+        
     (mapResult, (dimI, dimJ)), plantPoints
 
 let printAreas (garden: Garden) (areasByPlant: AreasByPlant) = 
@@ -390,7 +351,7 @@ TTTTTTTTIIIIIIIIIIIGGGGGGGGGGYYYYYYYIIIIIHRRRHHHRRRRRRHTTTTTTTTTTTTTTTTTTTAAIAII
 TTTTTTTTIIIIIIIGGGGGGGGGGGGGYYYYYYYYYIIIIHHHHHHHHHHHHHHHHHTTTTTTTTTTTTTTTAAAIIIIIIIIIIIEEEEEEEEEEEEEEEEEEEMYYYYYYYYYYYTXZZTTTTTTTTYBYRSRRRSR
 TTTTTTTXIIRIRIIIGGGGGGGGGGGGYYYYYYEYIIIIIHHHHHHHHHHHHHHHHHHTTTTTTTTTTTTTAAAIIIIIIIIIIIEEEEEEEEEEEEEEEEEEEEMYYYYYYYYYTTTTTTTTTTTTTTBBYRRRRRRR"""
 
-let garden = parse largerExample
+let garden = parse input
 
 printGarden garden
 
