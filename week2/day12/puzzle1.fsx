@@ -108,7 +108,6 @@ let rec getAreas (adjacenceLists: Map<Point, Point list>): Area list =
 
         pointsToVisit <- pointsToVisit |> List.except (pointsInGraph)
 
-        printfn ">%A %A" pointsInGraph pointsToVisit
         areas <- areas @ [pointsInGraph |> Set.toList]
 
     areas
